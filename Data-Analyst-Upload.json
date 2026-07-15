@@ -1,0 +1,858 @@
+{
+  "name": "Data-Analyst-Upload",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "upload-dataset",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "84758c58-59aa-4a51-9343-41d1f8c6126b",
+      "name": "Upload Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        304
+      ],
+      "webhookId": "bf9256e1-2e88-4dd9-bcf9-7cdddd21d4ca"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst allItems = $input.all();\nif (!allItems || allItems.length === 0) {\n  return [{ json: { valid: false, errors: ['No items received'], ext: null, filename: null, datasetId: null, binaryKey: null } }];\n}\nconst item = allItems[0];\nconst binary = item.binary || {};\nif (Object.keys(binary).length === 0) {\n  return [{ json: { valid: false, errors: ['No file found in request - ensure Content-Type: multipart/form-data'], ext: null, filename: null, datasetId: null, binaryKey: null } }];\n}\nconst binaryKey = Object.keys(binary)[0];\nconst file = binary[binaryKey];\nconst filename = file.fileName || file.filename || 'upload';\nconst ext = filename.split('.').pop().toLowerCase();\nconst allowedExts = ['csv', 'xlsx', 'xls'];\nconst maxBytes = 10 * 1024 * 1024;\nconst errors = [];\nif (!allowedExts.includes(ext)) {\n  errors.push('File type .' + ext + ' not allowed. Use: csv, xlsx, xls');\n}\nif (file.fileSize && file.fileSize > maxBytes) {\n  errors.push('File too large (max 10MB)');\n}\nconst { randomUUID } = require('crypto');\nconst datasetId = randomUUID();\nreturn [{ json: { valid: errors.length === 0, errors: errors, ext: ext, filename: filename, datasetId: datasetId, binaryKey: binaryKey }, binary: binary }];\n"
+      },
+      "id": "039d219e-9893-4c42-a644-9ba608462840",
+      "name": "Validate File",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "validity-check",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "81a14fea-ae76-42f2-82d2-721eab397fd3",
+      "name": "Branch Validity",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        448,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "is-csv",
+              "leftValue": "={{ $json.ext }}",
+              "rightValue": "csv",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e71a5929-0b3e-42c4-baee-5bca58e84f8f",
+      "name": "Route by Extension",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        672,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "binaryPropertyName": "={{ $json.binaryKey }}",
+        "options": {
+          "headerRow": true
+        }
+      },
+      "id": "02c851cf-b25b-44f1-93f4-e061f8214cb0",
+      "name": "Extract CSV",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        896,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst allItems = $input.all();\nconst rows = allItems.map(function(i) { return i.json; });\nreturn [{ json: { hasRows: rows.length > 0, rowCount: rows.length, rows: rows } }];\n"
+      },
+      "id": "ba471878-8824-4ffd-9e98-6f718b121d90",
+      "name": "Check Row Count",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "binaryPropertyName": "={{ $json.binaryKey }}",
+        "options": {
+          "headerRow": true
+        }
+      },
+      "id": "b146bf75-f9a5-42bc-be4a-dd2a3080bd28",
+      "name": "Extract XLSX",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        896,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ JSON.stringify($json.errors) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "0753c14a-d16b-4df5-a218-842f106bfdd1",
+      "name": "Reject Invalid",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        672,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "has-rows",
+              "leftValue": "={{ $json.hasRows }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "232a4c8a-bd02-44be-b06b-ec9f1435bdf9",
+      "name": "Check Non-Empty",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1344,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst data = $input.first().json;\nconst rows = data.rows || [];\nconst columns = rows.length > 0 ? Object.keys(rows[0]) : [];\nconst nRows = rows.length;\nconst nCols = columns.length;\nfunction isNumeric(v) {\n  if (v === null || v === undefined || v === '') return false;\n  const n = Number(v);\n  return !isNaN(n) && isFinite(n);\n}\nfunction isDatetime(v) {\n  if (typeof v !== 'string' || v.length < 5 || !isNaN(Number(v))) return false;\n  return !isNaN(Date.parse(v));\n}\nconst numericCols = [];\nconst categoricalCols = [];\nconst datetimeCols = [];\nconst profile = {};\nfor (var ci = 0; ci < columns.length; ci++) {\n  const col = columns[ci];\n  const vals = rows.map(function(r) { return r[col]; }).filter(function(v) { return v !== null && v !== undefined && v !== ''; });\n  const allNum = vals.length > 0 && vals.every(isNumeric);\n  const allDate = !allNum && vals.length > 0 && vals.every(isDatetime);\n  const dtype = allNum ? 'numeric' : allDate ? 'datetime' : 'categorical';\n  if (dtype === 'numeric') numericCols.push(col);\n  else if (dtype === 'datetime') datetimeCols.push(col);\n  else categoricalCols.push(col);\n  const missing = rows.filter(function(r) { return r[col] === null || r[col] === undefined || r[col] === ''; }).length;\n  const seen2 = {};\n  vals.forEach(function(v) { seen2[String(v)] = true; });\n  const uniqueVals = Object.keys(seen2);\n  const topValues = dtype === 'categorical' ? uniqueVals.slice(0, 5) : [];\n  profile[col] = { dtype: dtype, missing: missing, unique: uniqueVals.length, topValues: topValues };\n}\nconst seen = {};\nlet duplicateCount = 0;\nfor (var ri = 0; ri < rows.length; ri++) {\n  const key = JSON.stringify(rows[ri]);\n  if (seen[key]) duplicateCount++;\n  else seen[key] = true;\n}\nreturn [{ json: { rows: rows, nRows: nRows, nCols: nCols, numericCols: numericCols, categoricalCols: categoricalCols, datetimeCols: datetimeCols, profile: profile, duplicateCount: duplicateCount } }];\n"
+      },
+      "id": "74a53f64-5aca-40fc-9bee-9fda0f56463c",
+      "name": "Profile Dataset",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst data = $input.first().json;\nlet rows = data.rows || [];\nlet numericCols = (data.numericCols || []).slice();\nlet categoricalCols = (data.categoricalCols || []).slice();\nlet datetimeCols = (data.datetimeCols || []).slice();\nconst profile = data.profile || {};\nconst nCols = data.nCols || 0;\nconst duplicateCount = data.duplicateCount || 0;\nfunction toSnake(s) {\n  return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');\n}\nconst colMap = {};\nif (rows.length > 0) {\n  Object.keys(rows[0]).forEach(function(col) { colMap[col] = toSnake(col); });\n}\nconst renamedRows = rows.map(function(r) {\n  const n = {};\n  Object.keys(r).forEach(function(k) { n[colMap[k] || k] = r[k]; });\n  return n;\n});\nfunction rename(k) { return colMap[k] || k; }\nnumericCols = numericCols.map(rename);\ncategoricalCols = categoricalCols.map(rename);\ndatetimeCols = datetimeCols.map(rename);\nfunction median(arr) {\n  const s = arr.slice().sort(function(a, b) { return a - b; });\n  const m = Math.floor(s.length / 2);\n  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;\n}\nconst medians = {};\nfor (var ni = 0; ni < numericCols.length; ni++) {\n  const col = numericCols[ni];\n  const vals = renamedRows.map(function(r) { return parseFloat(r[col]); }).filter(function(v) { return !isNaN(v); });\n  medians[col] = vals.length ? median(vals) : 0;\n}\nconst seen = {};\nconst cleanedRows = [];\nfor (var ri = 0; ri < renamedRows.length; ri++) {\n  const row = renamedRows[ri];\n  const r = Object.assign({}, row);\n  numericCols.forEach(function(col) {\n    if (r[col] === null || r[col] === undefined || r[col] === '') r[col] = medians[col];\n    else r[col] = parseFloat(r[col]);\n  });\n  categoricalCols.forEach(function(col) {\n    if (r[col] === null || r[col] === undefined || r[col] === '') r[col] = 'Unknown';\n  });\n  const key = JSON.stringify(r);\n  if (!seen[key]) { seen[key] = true; cleanedRows.push(r); }\n}\nconst outlierReport = {};\nfor (var oi = 0; oi < numericCols.length; oi++) {\n  const col = numericCols[oi];\n  const vals = cleanedRows.map(function(r) { return r[col]; }).filter(function(v) { return typeof v === 'number'; });\n  if (vals.length === 0) {\n    outlierReport[col] = { q1: 0, q3: 0, iqr: 0, lowerFence: 0, upperFence: 0, outlierCount: 0 };\n    continue;\n  }\n  const s = vals.slice().sort(function(a, b) { return a - b; });\n  const q1 = s[Math.floor(s.length * 0.25)] || 0;\n  const q3 = s[Math.floor(s.length * 0.75)] || 0;\n  const iqr = q3 - q1;\n  const lo = q1 - 1.5 * iqr;\n  const hi = q3 + 1.5 * iqr;\n  const outlierCount = cleanedRows.filter(function(r) { return r[col] < lo || r[col] > hi; }).length;\n  outlierReport[col] = { q1: q1, q3: q3, iqr: iqr, lowerFence: lo, upperFence: hi, outlierCount: outlierCount };\n}\nreturn [{ json: { cleanedRows: cleanedRows, columnRenameMap: colMap, outlierReport: outlierReport, numericCols: numericCols, categoricalCols: categoricalCols, datetimeCols: datetimeCols, profile: profile, nRows: cleanedRows.length, nCols: nCols, duplicateCount: duplicateCount } }];\n"
+      },
+      "id": "663a5370-18b9-40fc-884f-cc78012df984",
+      "name": "Clean Dataset",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst d = $input.first().json;\nconst cleanedRows = d.cleanedRows || [];\nconst numericCols = d.numericCols || [];\nfunction calcStats(vals) {\n  const n = vals.length;\n  if (!n) return { count: 0, min: 0, max: 0, mean: 0, median: 0, std: 0, q1: 0, q3: 0 };\n  const s = vals.slice().sort(function(a, b) { return a - b; });\n  const sum = vals.reduce(function(a, b) { return a + b; }, 0);\n  const mean = sum / n;\n  const variance = vals.reduce(function(acc, v) { return acc + (v - mean) * (v - mean); }, 0) / n;\n  const q1 = s[Math.floor(n * 0.25)] || 0;\n  const q3 = s[Math.floor(n * 0.75)] || 0;\n  const med = n % 2 ? s[Math.floor(n / 2)] : (s[n / 2 - 1] + s[n / 2]) / 2;\n  return { count: n, min: s[0], max: s[n - 1], mean: +mean.toFixed(4), median: med, std: +Math.sqrt(variance).toFixed(4), q1: q1, q3: q3 };\n}\nconst descriptiveStats = {};\nfor (var i = 0; i < numericCols.length; i++) {\n  const col = numericCols[i];\n  const vals = cleanedRows.map(function(r) { return r[col]; }).filter(function(v) { return typeof v === 'number'; });\n  descriptiveStats[col] = calcStats(vals);\n}\nfunction pearson(xs, ys) {\n  const n = xs.length;\n  if (!n) return 0;\n  const mx = xs.reduce(function(a, b) { return a + b; }, 0) / n;\n  const my = ys.reduce(function(a, b) { return a + b; }, 0) / n;\n  let num = 0, dx = 0, dy = 0;\n  for (var j = 0; j < n; j++) {\n    const a = xs[j] - mx, b = ys[j] - my;\n    num += a * b; dx += a * a; dy += b * b;\n  }\n  return (dx && dy) ? +(num / Math.sqrt(dx * dy)).toFixed(4) : 0;\n}\nconst correlationMatrix = {};\nfor (var ci = 0; ci < numericCols.length; ci++) {\n  const c1 = numericCols[ci];\n  correlationMatrix[c1] = {};\n  const v1 = cleanedRows.map(function(r) { return r[c1]; }).filter(function(v) { return typeof v === 'number'; });\n  for (var cj = 0; cj < numericCols.length; cj++) {\n    const c2 = numericCols[cj];\n    const v2 = cleanedRows.map(function(r) { return r[c2]; }).filter(function(v) { return typeof v === 'number'; });\n    const len = Math.min(v1.length, v2.length);\n    correlationMatrix[c1][c2] = pearson(v1.slice(0, len), v2.slice(0, len));\n  }\n}\nreturn [{ json: { descriptiveStats: descriptiveStats, correlationMatrix: correlationMatrix, cleanedRows: cleanedRows, columnRenameMap: d.columnRenameMap, outlierReport: d.outlierReport, numericCols: numericCols, categoricalCols: d.categoricalCols, datetimeCols: d.datetimeCols, profile: d.profile, nRows: d.nRows, nCols: d.nCols, duplicateCount: d.duplicateCount } }];\n"
+      },
+      "id": "54a2b2ea-1a64-459b-9c9f-71c0109fe59c",
+      "name": "Compute Statistics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2016,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst vf = $('Validate File').first().json;\nconst stats = $input.first().json;\nreturn [{\n  json: {\n    datasetId: vf.datasetId,\n    filename: vf.filename,\n    nRows: stats.nRows,\n    nCols: stats.nCols,\n    duplicateCount: stats.duplicateCount,\n    numericCols: stats.numericCols,\n    categoricalCols: stats.categoricalCols,\n    datetimeCols: stats.datetimeCols,\n    profile: stats.profile,\n    outlierReport: stats.outlierReport,\n    descriptiveStats: stats.descriptiveStats,\n    correlationMatrix: stats.correlationMatrix,\n    cleanedRows: stats.cleanedRows\n  }\n}];\n"
+      },
+      "id": "478dedfa-ab24-4f98-8e7e-91311320fc4b",
+      "name": "Build Analysis Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "F7fghyVPsKJMCi8y"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "dataset_id": "={{ $json.datasetId }}",
+            "filename": "={{ $json.filename }}",
+            "n_rows": "={{ $json.nRows }}",
+            "n_cols": "={{ $json.nCols }}",
+            "duplicate_count": "={{ $json.duplicateCount }}",
+            "numeric_cols": "={{ JSON.stringify($json.numericCols) }}",
+            "categorical_cols": "={{ JSON.stringify($json.categoricalCols) }}",
+            "datetime_cols": "={{ JSON.stringify($json.datetimeCols) }}",
+            "profile_json": "={{ JSON.stringify($json.profile) }}",
+            "outlier_report_json": "={{ JSON.stringify($json.outlierReport) }}",
+            "descriptive_stats_json": "={{ JSON.stringify($json.descriptiveStats) }}",
+            "correlation_matrix_json": "={{ JSON.stringify($json.correlationMatrix) }}",
+            "cleaned_rows_json": "={{ JSON.stringify($json.cleanedRows) }}"
+          },
+          "schema": [
+            {
+              "id": "dataset_id",
+              "displayName": "dataset_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "filename",
+              "displayName": "filename",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "n_rows",
+              "displayName": "n_rows",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "n_cols",
+              "displayName": "n_cols",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "duplicate_count",
+              "displayName": "duplicate_count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "numeric_cols",
+              "displayName": "numeric_cols",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "categorical_cols",
+              "displayName": "categorical_cols",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "datetime_cols",
+              "displayName": "datetime_cols",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "profile_json",
+              "displayName": "profile_json",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "outlier_report_json",
+              "displayName": "outlier_report_json",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "descriptive_stats_json",
+              "displayName": "descriptive_stats_json",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "correlation_matrix_json",
+              "displayName": "correlation_matrix_json",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "cleaned_rows_json",
+              "displayName": "cleaned_rows_json",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a93a5b7f-11e1-4f16-bcb4-1441456193ae",
+      "name": "Cache Analysis",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        2464,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ 'Analyze this dataset and generate key insights and business recommendations.\\n\\nDataset stats: ' + JSON.stringify({nRows:$('Build Analysis Payload').item.json.nRows,nCols:$('Build Analysis Payload').item.json.nCols,duplicateCount:$('Build Analysis Payload').item.json.duplicateCount,numericCols:$('Build Analysis Payload').item.json.numericCols,categoricalCols:$('Build Analysis Payload').item.json.categoricalCols,descriptiveStats:$('Build Analysis Payload').item.json.descriptiveStats,correlationMatrix:$('Build Analysis Payload').item.json.correlationMatrix,outlierReport:$('Build Analysis Payload').item.json.outlierReport}) }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are a data analyst. Rules: (1) Only cite numbers present in the provided JSON - never invent metrics. (2) If data is insufficient, say so explicitly. (3) Structure output as valid JSON matching the schema. (4) Reference actual column names and numeric values from the data."
+        }
+      },
+      "id": "7f6a3b4b-1f4d-467a-8df0-88262ada5f9e",
+      "name": "Generate Insights",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        2688,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "cb679cf1-1d73-4ce5-802d-f16d6969ecf1",
+      "name": "OpenAI Insights Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        2704,
+        336
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "Y26cpn2LqDdoClCU",
+          "name": "n8n free OpenAI API credits"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": {
+          "keyInsights": [
+            "Sales peak in Q4 at 1400 units",
+            "North region outperforms South by 16%"
+          ],
+          "businessRecommendations": [
+            "Increase Q4 inventory by 20%",
+            "Replicate North region strategy"
+          ],
+          "conclusion": "Strong seasonality and regional performance gaps detected."
+        }
+      },
+      "id": "0b75cb9b-3c4f-45b4-a21c-b3cfbb66d944",
+      "name": "Insights Schema",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        2832,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ 'Given numeric columns ' + JSON.stringify($('Build Analysis Payload').item.json.numericCols) + ' and categorical columns ' + JSON.stringify($('Build Analysis Payload').item.json.categoricalCols) + ', recommend the single most useful chart. Respond only as JSON.' }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are a data visualization expert. Always respond with JSON only, selecting the most informative chart type for the given columns."
+        }
+      },
+      "id": "be033cb0-a87d-47aa-817c-9f24748e400d",
+      "name": "Recommend Chart",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        3040,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "4acb7ae6-9940-427f-b04f-3241791a4428",
+      "name": "OpenAI Chart Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        3056,
+        336
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "Y26cpn2LqDdoClCU",
+          "name": "n8n free OpenAI API credits"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": {
+          "chartType": "bar",
+          "xField": "region",
+          "yField": "sales",
+          "reason": "Bar chart best highlights regional sales differences"
+        }
+      },
+      "id": "2b027abc-a5ff-4da4-a6cf-3d877ad6c1c2",
+      "name": "Chart Schema",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        3184,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst recNode = $('Recommend Chart').first().json;\nconst chartData = (recNode && recNode.output) ? recNode.output : { chartType: 'bar', xField: 'category', yField: 'value', reason: 'default fallback' };\nconst cleanedRows = $('Build Analysis Payload').first().json.cleanedRows || [];\nconst xField = chartData.xField || 'category';\nconst yField = chartData.yField || 'value';\nconst labels = cleanedRows.slice(0, 10).map(function(r) { return String(r[xField] !== undefined ? r[xField] : 'N/A'); });\nconst vals = cleanedRows.slice(0, 10).map(function(r) { return parseFloat(r[yField]) || 0; });\nconst config = {\n  type: chartData.chartType || 'bar',\n  data: { labels: labels, datasets: [{ label: yField, data: vals }] }\n};\nconst chartUrl = 'https://quickchart.io/chart?c=' + encodeURIComponent(JSON.stringify(config));\nreturn [{ json: { chartUrl: chartUrl, chartType: chartData.chartType || 'bar', xField: xField, yField: yField, reason: chartData.reason || 'auto-selected' } }];\n"
+      },
+      "id": "c6ce68f7-01c3-4b71-9bd5-52bd5b43207a",
+      "name": "Build Chart URL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3392,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst p = $('Build Analysis Payload').first().json;\nconst insightsNode = $('Generate Insights').first().json;\nconst insights = (insightsNode && insightsNode.output)\n  ? insightsNode.output\n  : { keyInsights: ['AI analysis unavailable - review raw statistics'], businessRecommendations: ['Review the descriptive statistics below'], conclusion: 'AI temporarily unavailable.' };\nconst chart = $input.first().json;\nconst statsLines = Object.entries(p.descriptiveStats || {}).map(function(e) {\n  const col = e[0]; const s = e[1];\n  return '| ' + col + ' | ' + s.min + ' | ' + s.max + ' | ' + s.mean + ' | ' + s.median + ' | ' + s.std + ' |';\n}).join('\\n');\nconst corrLines = Object.entries(p.correlationMatrix || {}).map(function(e) {\n  const c1 = e[0]; const row = e[1];\n  return '| ' + c1 + ' | ' + Object.values(row).join(' | ') + ' |';\n}).join('\\n');\nconst outlierLines = Object.entries(p.outlierReport || {}).map(function(e) {\n  const col = e[0]; const o = e[1];\n  return '- **' + col + '**: ' + o.outlierCount + ' outliers (fences: [' + Number(o.lowerFence).toFixed(2) + ', ' + Number(o.upperFence).toFixed(2) + '])';\n}).join('\\n');\nconst ki = (insights.keyInsights || []).map(function(k, i) { return (i + 1) + '. ' + k; }).join('\\n');\nconst br = (insights.businessRecommendations || []).map(function(r, i) { return (i + 1) + '. ' + r; }).join('\\n');\nconst md = '# Data Analysis Report\\n\\n'\n  + '## Dataset Overview\\n'\n  + '- **File**: ' + p.filename + '\\n'\n  + '- **Rows**: ' + p.nRows + '\\n'\n  + '- **Columns**: ' + p.nCols + '\\n'\n  + '- **Dataset ID**: ' + p.datasetId + '\\n\\n'\n  + '## Data Quality Summary\\n'\n  + '- Duplicate rows detected: ' + p.duplicateCount + '\\n'\n  + '- Numeric columns: ' + (p.numericCols || []).join(', ') + '\\n'\n  + '- Categorical columns: ' + (p.categoricalCols || []).join(', ') + '\\n'\n  + '- Datetime columns: ' + (p.datetimeCols || []).join(', ') + '\\n\\n'\n  + '## Outliers\\n'\n  + (outlierLines || 'None detected') + '\\n\\n'\n  + '## Exploratory Data Analysis\\n'\n  + '| Column | Min | Max | Mean | Median | Std |\\n'\n  + '|--------|-----|-----|------|--------|-----|\\n'\n  + (statsLines || '| No numeric columns | - | - | - | - | - |') + '\\n\\n'\n  + '## Correlations\\n'\n  + (corrLines || 'No numeric columns for correlation') + '\\n\\n'\n  + '## Key Insights\\n'\n  + ki + '\\n\\n'\n  + '## Business Recommendations\\n'\n  + br + '\\n\\n'\n  + '## Conclusion\\n'\n  + (insights.conclusion || '') + '\\n\\n'\n  + '## Suggested Visualization\\n'\n  + '![Chart](' + chart.chartUrl + ')\\n'\n  + '- Type: ' + chart.chartType + ', X: ' + chart.xField + ', Y: ' + chart.yField + '\\n';\nreturn [{ json: { reportMarkdown: md, chartUrl: chart.chartUrl, datasetId: p.datasetId, summary: { nRows: p.nRows, nCols: p.nCols, numericCols: p.numericCols, categoricalCols: p.categoricalCols, duplicateCount: p.duplicateCount } } }];\n"
+      },
+      "id": "6aa2c616-e038-4455-ba54-b81485afb503",
+      "name": "Assemble Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3616,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { datasetId: $json.datasetId, reportMarkdown: $json.reportMarkdown, chartUrl: $json.chartUrl, summary: $json.summary } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "4c3ad253-693e-48f3-b317-2c3439a11908",
+      "name": "Final Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        3840,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "Dataset contains no rows.",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "e4b81ce5-101d-48e2-9103-2c564d5b0052",
+      "name": "Reject Empty",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1568,
+        304
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Upload Trigger": {
+      "main": [
+        [
+          {
+            "node": "Validate File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate File": {
+      "main": [
+        [
+          {
+            "node": "Branch Validity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Branch Validity": {
+      "main": [
+        [
+          {
+            "node": "Route by Extension",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject Invalid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Extension": {
+      "main": [
+        [
+          {
+            "node": "Extract CSV",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Extract XLSX",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract CSV": {
+      "main": [
+        [
+          {
+            "node": "Check Row Count",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Row Count": {
+      "main": [
+        [
+          {
+            "node": "Check Non-Empty",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract XLSX": {
+      "main": [
+        [
+          {
+            "node": "Check Row Count",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Non-Empty": {
+      "main": [
+        [
+          {
+            "node": "Profile Dataset",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject Empty",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Profile Dataset": {
+      "main": [
+        [
+          {
+            "node": "Clean Dataset",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean Dataset": {
+      "main": [
+        [
+          {
+            "node": "Compute Statistics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Statistics": {
+      "main": [
+        [
+          {
+            "node": "Build Analysis Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Analysis Payload": {
+      "main": [
+        [
+          {
+            "node": "Cache Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cache Analysis": {
+      "main": [
+        [
+          {
+            "node": "Generate Insights",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Insights": {
+      "main": [
+        [
+          {
+            "node": "Recommend Chart",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Insights Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Generate Insights",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insights Schema": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Generate Insights",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recommend Chart": {
+      "main": [
+        [
+          {
+            "node": "Build Chart URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chart Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Recommend Chart",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chart Schema": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Recommend Chart",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Chart URL": {
+      "main": [
+        [
+          {
+            "node": "Assemble Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assemble Report": {
+      "main": [
+        [
+          {
+            "node": "Final Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "9ed04575-4b36-40c0-94ad-7f0a971a4a36",
+  "meta": {
+    "instanceId": "5e0ca2adf8b36cb9150730c9d8fa666475d3b4cb7078ce6c0efe6d97bc894e70"
+  },
+  "nodeGroups": [],
+  "id": "puxE2uP4jGib14Dw",
+  "tags": []
+}
